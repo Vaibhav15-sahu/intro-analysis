@@ -7,41 +7,131 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .box {
+            display: flex;
+            margin: 20px;
+            flex-wrap: wrap;
+        }
+        
+        #record_box{
+            width: 48%;
+        }
+
+        .video-frame{
+            background-color: black;
+            width: 640px;
+            height: 480px;  
+            margin: 40px;
+            border-radius: 5px;
+        }
+
+        #preview_box{
+            width: 48%;
+        }
+
+        h1 {
+            margin: 30px;
+        }
+
+        button{
+            margin-left: 35px;
+            width: 120px;
+            height: 50px;
+        }
+
+        #loadingOverlay{
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: rgb(236, 226, 226);
+            z-index: 999;
+            display: none;
+        }
+        .loading-spinner {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @media (max-width: 1440px) {
+            .box {
+                flex-direction: column;
+            }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+    </style>
 </head>
 
 <body>
-    <h1>Record Your Video Introduction</h1>
+    
+    <div class="box">
+        <div id="record_box" >
+            <h1>Record Your Video Introduction</h1>
+            <div class="video-frame">
+                <video id="video-preview" width="640" height="480" controls muted style="border-radius: 5px;" ></video>
+            </div>
+            <button id="start-recording">Start Recording</button>
+            <button id="stop-recording" disabled>Stop Recording</button>
+        </div>
+    
+        <div id="preview_box">
+            <h1>Video Preview</h1>
+            <div class="video-frame" >
+                <video id="recorded-video" width="640" height="480" controls style="display: none; border-radius: 5px;"></video>
+            </div>
+            <button id="retake" disabled>Retake</button>
+            <button id="upload-btn" disabled>Upload Video</button>
+        </div>
+    </div>
 
-    <div>
-        <video id="video-preview" width="640" height="480" controls></video>
-        <video id="recorded-video" width="640" height="480" controls
-            style="display: none; position: absolute; top: 80px; right: 30px;"></video>
-
-        <br><br>    
-        <button id="start-recording">Start Recording</button>
-        <button id="stop-recording" disabled>Stop Recording</button>
-        <button id="retake" disabled>Retake</button>
-        <form id="upload-form" method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <input type="file" name="video-file" id="video-file" style="display: none;">
-            <button type="submit" id="upload-btn" disabled>Upload Video</button>
-        </form>
+    <div id="loadingOverlay" >
+        <div class="text">
+            <h1>Processing </h1>
+            <p>This will take few minutes...</p>
+        </div>
+        <div class="loading-spinner" id="spinner"></div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // selected buttons 
             const videoPreview = document.getElementById('video-preview');
             const recordedVideo = document.getElementById('recorded-video');
             const startRecordingBtn = document.getElementById('start-recording');
             const stopRecordingBtn = document.getElementById('stop-recording');
             const retake = document.getElementById('retake');
-            const uploadForm = document.getElementById('upload-form');
-            const videoFileInput = document.getElementById('video-file');
             const uploadBtn = document.getElementById('upload-btn');
 
+            // variables
             let mediaRecorder;
             let recordedChunks = [];
+            let tabSwitchCount = 0;
+            let totalHiddenTime = 0;
+            let isTabHidden = false;
+            let tabHiddenStartTime;
 
+            // functions
             async function startRecording() {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 videoPreview.srcObject = stream;
@@ -53,16 +143,15 @@
                 mediaRecorder.ondataavailable = function (event) {
                     if (event.data.size > 0) {
                         recordedChunks.push(event.data);
-                        console.log(event.data);
                     }
                 };
 
                 mediaRecorder.onstop = function () {
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
+
                     recordedVideo.src = URL.createObjectURL(blob);
 
                     recordedVideo.style.display = 'block';
-
                     uploadBtn.removeAttribute('disabled');
                 };
 
@@ -70,18 +159,21 @@
                 startRecordingBtn.setAttribute('disabled', 'true');
                 stopRecordingBtn.removeAttribute('disabled');
             }
-            
+
             function stopRecording() {
                 videoPreview.pause()
                 mediaRecorder.stop();
-                
+
                 retake.removeAttribute('disabled');
                 stopRecordingBtn.setAttribute('disabled', 'true');
             }
 
-            function retakeShot(){
+            function retakeShot() {
                 mediaRecorder = null;
                 recordedChunks = [];
+                tabSwitchCount = 0;
+                totalHiddenTime = 0;
+                isTabHidden = false;
                 startRecording();
 
                 startRecordingBtn.setAttribute('disabled', 'true');
@@ -90,16 +182,66 @@
                 uploadBtn.setAttribute('disabled', 'true');
             }
 
+            function handleVisibilityChange() {
+                if (document.hidden) {
+                    // Tab is hidden
+                    tabSwitchCount += 1;
+                    isTabHidden = true;
+                    tabHiddenStartTime = Date.now();
+                } else {
+                    // Tab is visible
+                    if (isTabHidden) {
+                        // Tab was hidden, calculate the duration and update totalHiddenTime
+                        const tabHiddenEndTime = Date.now();
+                        const hiddenDuration = tabHiddenEndTime - tabHiddenStartTime;
+                        totalHiddenTime += hiddenDuration;
+                        isTabHidden = false;
+                    }
+                }
+            }
+
+            function startLoader(){
+                var secondDiv = document.getElementById("loadingOverlay");
+                if (secondDiv.style.display === "none") {
+                    secondDiv.style.display = "block";
+                } else {
+                    secondDiv.style.display = "none";
+                }
+            }
+
+            function uploadVideo() {
+                startLoader();
+                const formData = new FormData();
+                formData.append('video-file', new File(recordedChunks, 'recorded-video.webm', { type: 'video/webm' }));
+                formData.append('tabSwitchCount', tabSwitchCount);
+                formData.append('totalHiddenTime', totalHiddenTime);
+                fetch('/upload/', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Upload successful:', data);
+                    if (data.status === 'success') {
+                        // Redirect to the recording page
+                        window.location.href = '/home/';
+                    } else {
+                        window.location.href = '/home/';
+                        console.error('Error during upload:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error during upload:', error);
+                });
+                startLoader();
+            }
+
+
+            document.addEventListener('visibilitychange', handleVisibilityChange);
             startRecordingBtn.addEventListener('click', startRecording);
             stopRecordingBtn.addEventListener('click', stopRecording);
             retake.addEventListener('click', retakeShot);
-
-            uploadForm.addEventListener('submit', function (event) {
-                if (!videoFileInput.files.length) {
-                    event.preventDefault();
-                    alert('Please record a video first.');
-                }
-            });
+            uploadBtn.addEventListener('click', uploadVideo);
         });
     </script>
 </body>

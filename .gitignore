@@ -1,0 +1,6 @@
+my_env/
+migrations/
+db.sqlite3
+.env
+*.pyc
+*.webm

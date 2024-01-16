@@ -1,0 +1,1 @@
+All the recorded videos will be stored in this direcotry.

@@ -11,23 +11,31 @@ This Django application allows users to record video introductions, analyzes fac
   - [Keyword Extraction](#keyword-extraction)
 
 ## Installation
-1. Clone the repository:
-2. Create directory:
+1. Create directory:
     ```bash
-    cd your-repository
-3. Install dependencies:
+    cd your_repository
+2. Clone the repository:
     ```bash
+    git clone https://github.com/Vaibhav15-sahu/intro-analysis.git
+3. Create Virtual env:
+    ```bash
+    py -m venv my_env
+4. Activate the Virtual env:
+
+5. Install dependencies:
+    ```bash
+    cd intro-analysis
     pip install -r requirements.txt
 ## Run
-1. Run the Django migrations:
+1. update the settings:
+    
+2. Run the Django migrations:
     ```bash
     python manage.py migrate
-2. Start the development server:
+3. Start the development server:
     ```bash
     python manage.py runserver
 ## Reqirements
-    
-
 1. Django
 2. OpenCV
 3. MySql
